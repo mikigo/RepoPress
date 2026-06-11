@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from server.schemas import (
+from schemas import (
     ErrorResponse,
     LoginRequest,
     LoginResponse,
     UserResponse,
 )
-from server.services import (
+from services import (
     authenticate_user,
     create_access_token,
     get_user_by_id,

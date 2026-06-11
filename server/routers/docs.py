@@ -2,8 +2,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from server.routers.auth import get_current_user
-from server.schemas import (
+from routers.auth import get_current_user
+from schemas import (
     DeleteResponse,
     FileContentResponse,
     FileHistoryResponse,
@@ -11,7 +11,7 @@ from server.schemas import (
     SaveFileRequest,
     UserResponse,
 )
-from server.services import (
+from services import (
     delete_file as svc_delete_file,
     get_file as svc_get_file,
     get_file_history as svc_get_file_history,

@@ -2,8 +2,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from server.models import User
-from server.schemas import (
+from models import User
+from schemas import (
     ErrorResponse,
     PermissionCreate,
     PermissionsUpdateRequest,
@@ -14,7 +14,7 @@ from server.schemas import (
     UserResponse,
     UserUpdate,
 )
-from server.services import (
+from services import (
     create_repo,
     create_user,
     delete_repo,
@@ -25,7 +25,7 @@ from server.services import (
     update_repo,
     update_user,
 )
-from server.routers.auth import get_current_user
+from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

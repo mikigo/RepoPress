@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 
-from server.config import settings
+from config import settings
 
 logger = logging.getLogger("repopress")
 

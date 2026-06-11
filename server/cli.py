@@ -74,14 +74,14 @@ def cmd_start(args: argparse.Namespace):
     # Import and run uvicorn in the same process
     import uvicorn
 
-    from server.config import settings
+    from config import settings
 
     # Write current PID
     _write_pid(os.getpid())
 
     try:
         uvicorn.run(
-            "server.main:app",
+            "main:app",
             host=settings.host,
             port=settings.port,
             reload=settings.debug,
@@ -139,9 +139,9 @@ def cmd_createsuperuser(args: argparse.Namespace):
 
     from tortoise import Tortoise
 
-    from server.config import settings
-    from server.schemas import UserCreate
-    from server.services import create_user
+    from config import settings
+    from schemas import UserCreate
+    from services import create_user
 
     print("Creating a superuser for RepoPress")
     print("=" * 40)
@@ -174,7 +174,7 @@ def cmd_createsuperuser(args: argparse.Namespace):
         db_url = settings.database_url
         await Tortoise.init(
             db_url=db_url,
-            modules={"models": ["server.models"]},
+            modules={"models": ["models"]},
         )
         await Tortoise.generate_schemas()
 

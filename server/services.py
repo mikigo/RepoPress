@@ -8,10 +8,10 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from tortoise.exceptions import DoesNotExist
 
-from server.config import settings
-from server.models import Permission, RepoConfig, Role, User
-from server.repo import GitHubProvider, GitProvider
-from server.schemas import (
+from config import settings
+from models import Permission, RepoConfig, Role, User
+from repo import GitHubProvider, GitProvider
+from schemas import (
     FileContentResponse,
     PermissionCreate,
     RepoConfigCreate,
@@ -324,7 +324,7 @@ async def delete_file(repo_id: UUID, path: str, message: Optional[str] = None) -
         "Accept": "application/vnd.github+json",
         "User-Agent": "RepoPress/0.1.0",
     }
-    from server.repo import parse_github_url
+    from repo import parse_github_url
     owner, repo_name = parse_github_url(repo.git_url)
     url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/{path}"
 

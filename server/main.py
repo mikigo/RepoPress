@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from tortoise import Tortoise
 
-from server.config import settings
+from config import settings
 
 logger = logging.getLogger("repopress")
 
@@ -33,14 +33,14 @@ async def _init_db():
 
     await Tortoise.init(
         db_url=db_url,
-        modules={"models": ["server.models"]},
+        modules={"models": ["models"]},
     )
     await Tortoise.generate_schemas()
 
 
 async def _create_default_roles():
     """Ensure default roles (admin/editor/viewer) exist."""
-    from server.models import Role
+    from models import Role
 
     for role_name in ("admin", "editor", "viewer"):
         exists = await Role.filter(name=role_name).first()
@@ -51,9 +51,9 @@ async def _create_default_roles():
 
 async def _create_default_superuser():
     """Create a default superuser if no users exist."""
-    from server.models import User
-    from server.services import create_user, get_password_hash
-    from server.schemas import UserCreate
+    from models import User
+    from services import create_user, get_password_hash
+    from schemas import UserCreate
 
     user_count = await User.all().count()
     if user_count == 0:
@@ -97,14 +97,14 @@ def create_app() -> FastAPI:
     )
 
     # Setup middleware
-    from server.middleware import setup_middleware
+    from middleware import setup_middleware
 
     setup_middleware(app)
 
     # Register routers
-    from server.routers.auth import router as auth_router
-    from server.routers.admin import router as admin_router
-    from server.routers.docs import router as docs_router
+    from routers.auth import router as auth_router
+    from routers.admin import router as admin_router
+    from routers.docs import router as docs_router
 
     app.include_router(auth_router)
     app.include_router(admin_router)
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     )
 
     uvicorn.run(
-        "server.main:app",
+        "main:app",
         host=settings.host,
         port=settings.port,
         reload=settings.debug,

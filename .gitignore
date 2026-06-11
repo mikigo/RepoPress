@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Worktrees
+.worktrees/
+.claude/settings.json
+.claude/settings.local.json
