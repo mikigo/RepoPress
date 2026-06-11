@@ -1,8 +1,11 @@
+import asyncio
 import base64
+import os
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -269,4 +272,154 @@ class GitHubProvider(GitProvider):
                     size=item.get("size"),
                 )
             )
+        return items
+
+
+class LocalGitProvider(GitProvider):
+    """Git provider that operates on a local git repository via subprocess."""
+
+    def __init__(self, repo_path: str, default_branch: str = "main"):
+        self.repo_path = Path(repo_path).resolve()
+        if not (self.repo_path / ".git").exists():
+            raise ValueError(f"Not a git repository: {self.repo_path}")
+        self.default_branch = default_branch
+
+    async def _run(self, *args: str, cwd: str | None = None) -> str:
+        """Run a git command and return stdout."""
+        cmd = ["git", "-C", str(cwd or self.repo_path)] + list(args)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err = stderr.decode().strip()
+            raise Exception(f"git {args[0]} failed: {err}")
+        return stdout.decode().strip()
+
+    async def get_file(self, path: str, ref: Optional[str] = None) -> FileInfo:
+        ref = ref or self.default_branch
+        content = await self._run("show", f"{ref}:{path}")
+        sha = await self._run("rev-parse", f"{ref}:{path}")
+        return FileInfo(
+            path=path,
+            content=content,
+            sha=sha,
+            encoding="utf-8",
+        )
+
+    async def create_or_update_file(
+        self, path: str, content: str, message: str, branch: str
+    ) -> CommitResult:
+        full_path = self.repo_path / path
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(content, encoding="utf-8")
+
+        # Checkout target branch
+        await self._run("checkout", branch)
+
+        await self._run("add", path)
+        await self._run("commit", "-m", message, "--allow-empty")
+        sha = await self._run("rev-parse", "HEAD")
+        return CommitResult(sha=sha, url=None)
+
+    async def _has_remote(self) -> bool:
+        """Check if origin remote is configured."""
+        try:
+            remotes = await self._run("remote")
+            return "origin" in remotes
+        except Exception:
+            return False
+
+    async def _has_remote_branch(self, branch: str) -> bool:
+        """Check if remote tracking branch exists."""
+        try:
+            await self._run("rev-parse", "--verify", f"origin/{branch}")
+            return True
+        except Exception:
+            return False
+
+    async def fetch_and_rebase(self, branch: str) -> dict:
+        """Fetch origin and rebase local branch on top. Returns status dict."""
+        if not await self._has_remote():
+            return {"success": True, "skipped": True, "detail": "No remote configured, skipping fetch"}
+
+        try:
+            await self._run("fetch", "origin")
+        except Exception as exc:
+            return {"success": False, "error": f"Fetch failed: {exc}"}
+
+        if not await self._has_remote_branch(branch):
+            return {"success": True, "skipped": True, "detail": "No remote branch yet, skipping rebase"}
+
+        try:
+            await self._run("checkout", branch)
+            await self._run("pull", "--rebase", "origin", branch)
+            return {"success": True, "detail": "Rebase successful"}
+        except Exception as exc:
+            err = str(exc)
+            # Try to abort the rebase if it's in progress
+            try:
+                await self._run("rebase", "--abort")
+            except Exception:
+                pass
+            return {"success": False, "conflict": True, "error": f"Rebase conflict: {err}"}
+
+    async def push(self, branch: str) -> dict:
+        """Push branch to origin. Returns dict with success/error info."""
+        if not await self._has_remote():
+            return {"success": False, "error": "No remote 'origin' configured"}
+        try:
+            output = await self._run("push", "origin", branch)
+            return {"success": True, "detail": output or "Push successful"}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def create_branch(self, name: str, base: str) -> Branch:
+        await self._run("checkout", base)
+        await self._run("checkout", "-b", name)
+        sha = await self._run("rev-parse", "HEAD")
+        return Branch(name=name, sha=sha)
+
+    async def create_pr(
+        self, title: str, head: str, base: str, body: str = ""
+    ) -> PullRequest:
+        raise NotImplementedError("PR creation not supported for local repos")
+
+    async def get_file_history(self, path: str) -> list[Commit]:
+        fmt = "--format=%H||%s||%an||%aI"
+        output = await self._run("log", fmt, "--", path)
+        commits = []
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split("||", 3)
+            if len(parts) == 4:
+                commits.append(Commit(
+                    sha=parts[0],
+                    message=parts[1],
+                    author=parts[2],
+                    date=datetime.fromisoformat(parts[3]),
+                ))
+        return commits
+
+    async def get_tree(self, path: str = "", ref: Optional[str] = None) -> list[TreeItem]:
+        ref = ref or self.default_branch
+        prefix = f"{ref}:{path}" if path else ref
+        output = await self._run("ls-tree", "-r", prefix)
+        items = []
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            # format: <mode> <type> <sha>\t<path>
+            meta, file_path = line.split("\t", 1)
+            mode, obj_type, sha = meta.split()
+            full_path = f"{path}/{file_path}" if path else file_path
+            items.append(TreeItem(
+                path=full_path,
+                type=obj_type,
+                sha=sha,
+                size=None,
+            ))
         return items

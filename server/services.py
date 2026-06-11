@@ -4,13 +4,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from tortoise.exceptions import DoesNotExist
 
 from config import settings
 from models import Permission, RepoConfig, Role, User
-from repo import GitHubProvider, GitProvider
+from repo import GitHubProvider, GitProvider, LocalGitProvider
 from schemas import (
     FileContentResponse,
     PermissionCreate,
@@ -21,8 +21,6 @@ from schemas import (
 )
 
 logger = logging.getLogger("repopress")
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ─── Encryption helpers for access_token ───────────────────────────────
@@ -67,11 +65,11 @@ def decrypt_token(ciphertext_b64: str, key: str = settings.encryption_key) -> st
 # ─── Auth Service ──────────────────────────────────────────────────────
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
 def create_access_token(user: User) -> str:
@@ -126,10 +124,11 @@ async def get_user_by_id(user_id: UUID) -> Optional[User]:
 # ─── Admin Service ─────────────────────────────────────────────────────
 
 async def create_repo(repo_data: RepoConfigCreate) -> RepoConfig:
-    encrypted_token = encrypt_token(repo_data.access_token)
+    encrypted_token = encrypt_token(repo_data.access_token) if repo_data.access_token else ""
     repo = await RepoConfig.create(
         name=repo_data.name,
         git_url=repo_data.git_url,
+        local_path=repo_data.local_path,
         docs_dir=repo_data.docs_dir,
         ssg_type=repo_data.ssg_type,
         default_branch=repo_data.default_branch,
@@ -229,6 +228,12 @@ async def get_provider_for_repo(repo_id: UUID) -> GitProvider:
     if not repo:
         raise ValueError(f"Repo not found: {repo_id}")
 
+    if repo.local_path:
+        return LocalGitProvider(
+            repo_path=repo.local_path,
+            default_branch=repo.default_branch,
+        )
+
     token = decrypt_token(repo.access_token)
     return GitHubProvider(
         git_url=repo.git_url,
@@ -287,13 +292,31 @@ async def save_file(
             "mode": "review",
         }
     else:
-        # Direct mode: commit directly to default branch
+        # Direct mode: fetch → rebase → write → commit → push
+        rebase_result = None
+        push_result = None
+
+        if isinstance(provider, LocalGitProvider):
+            rebase_result = await provider.fetch_and_rebase(repo.default_branch)
+            if not rebase_result.get("success"):
+                return {
+                    "mode": "direct",
+                    "rebase": rebase_result,
+                    "conflict": rebase_result.get("conflict", False),
+                }
+
         result = await provider.create_or_update_file(
             path=path, content=content, message=commit_msg, branch=repo.default_branch
         )
+
+        if isinstance(provider, LocalGitProvider):
+            push_result = await provider.push(repo.default_branch)
+
         return {
             "commit_sha": result.sha,
             "mode": "direct",
+            "rebase": rebase_result,
+            "push": push_result,
         }
 
 
@@ -363,9 +386,41 @@ async def rename_file(
     }
 
 
+def _add_nested(parent: dict, item, relative_path: str):
+    """Recursively add an item into the tree at the correct depth."""
+    parts = relative_path.split("/", 1)
+
+    if len(parts) == 1:
+        # Direct child of parent
+        full_child = {
+            "name": parts[0],
+            "path": item.path,
+            "type": "file" if item.type == "blob" else "dir",
+            "children": [] if item.type == "tree" else None,
+        }
+        if full_child not in parent["children"]:
+            parent["children"].append(full_child)
+    else:
+        dir_name, rest = parts
+        dir_path = parent["path"] + "/" + dir_name
+        # Find or create intermediate dir
+        child_dir = next(
+            (c for c in parent["children"] if c["name"] == dir_name and c["type"] == "dir"),
+            None,
+        )
+        if child_dir is None:
+            child_dir = {
+                "name": dir_name,
+                "path": dir_path,
+                "type": "dir",
+                "children": [],
+            }
+            parent["children"].append(child_dir)
+        _add_nested(child_dir, item, rest)
+
+
 def _build_tree(items: list, prefix: str = "") -> list[dict]:
     """Build a nested tree structure from flat path items."""
-    # Filter items that are direct children of the prefix
     tree_map: dict[str, dict] = {}
 
     for item in items:
@@ -377,7 +432,7 @@ def _build_tree(items: list, prefix: str = "") -> list[dict]:
         parts = relative.split("/")
 
         if len(parts) == 1:
-            # Direct child
+            # Direct child of prefix
             name = parts[0]
             tree_map[name] = {
                 "name": name,
@@ -386,7 +441,7 @@ def _build_tree(items: list, prefix: str = "") -> list[dict]:
                 "children": [] if item.type == "tree" else None,
             }
         else:
-            # Nested - ensure parent dirs exist
+            # Nested — ensure parent dir exists, then recurse
             dir_name = parts[0]
             if dir_name not in tree_map:
                 dir_path = prefix + "/" + dir_name if prefix else dir_name
@@ -396,18 +451,7 @@ def _build_tree(items: list, prefix: str = "") -> list[dict]:
                     "type": "dir",
                     "children": [],
                 }
-            # Add the item to parent's children list
-            parent = tree_map[dir_name]
-            child_path = item_path
-            child_name = parts[-1]
-            full_child = {
-                "name": child_name,
-                "path": child_path,
-                "type": "file" if item.type == "blob" else "dir",
-                "children": [] if item.type == "tree" else None,
-            }
-            if full_child not in parent["children"]:
-                parent["children"].append(full_child)
+            _add_nested(tree_map[dir_name], item, "/".join(parts[1:]))
 
     # Sort: dirs first, then alphabetical
     result = sorted(tree_map.values(), key=lambda x: (0 if x["type"] == "dir" else 1, x["name"]))

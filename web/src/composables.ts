@@ -10,30 +10,36 @@ export function useAuth() {
 }
 
 export function useEditor() {
-  const editor = useEditorStore()
+  const store = useEditorStore()
 
-  async function openFile(path: string) {
+  async function fetchAndOpen(path: string) {
     const repo = useRepoStore()
     if (!repo.currentRepoId) return
     const data = await api.docs.getFile(repo.currentRepoId, path)
-    editor.openFile(path, data.content)
+    store.openFile(path, data.content)
   }
 
   async function saveFile(message?: string) {
     const repo = useRepoStore()
-    if (!repo.currentRepoId || !editor.currentFile) return
-    const commitMsg = message || `docs: update ${editor.currentFile}`
+    if (!repo.currentRepoId || !store.currentFile) return
+    const commitMsg = message || `docs: update ${store.currentFile}`
     const data = await api.docs.saveFile({
       repo_id: repo.currentRepoId,
-      path: editor.currentFile,
-      content: editor.content,
+      path: store.currentFile,
+      content: store.content,
       message: commitMsg,
     })
-    editor.markSaved()
-    return data
+    store.markSaved()
+    return data as {
+      commit_sha?: string
+      mode: string
+      conflict?: boolean
+      rebase?: { success: boolean; error?: string }
+      push?: { success: boolean; detail?: string; error?: string }
+    }
   }
 
-  return { ...editor, openFile, saveFile }
+  return { store, fetchAndOpen, saveFile }
 }
 
 export function usePreview() {
@@ -43,85 +49,28 @@ export function usePreview() {
     typographer: true,
   })
 
-  const state = reactive({
-    renderedHtml: '',
-  })
+  const renderedHtml = ref('')
 
   function render(content: string) {
     try {
-      state.renderedHtml = md.render(content)
+      renderedHtml.value = md.render(content)
     } catch {
-      state.renderedHtml = '<p style="color:red">Render error</p>'
+      renderedHtml.value = '<p style="color:red">Render error</p>'
     }
   }
 
-  return { ...state, render }
+  return reactive({ renderedHtml, render })
 }
 
 export function useFileTree() {
-  const repo = useRepoStore()
-
-  async function refresh() {
-    await repo.fetchTree()
-  }
+  const store = useRepoStore()
 
   async function loadChildren(item: TreeItem): Promise<TreeItem[] | undefined> {
-    if (item.children) return item.children
-    const items = await api.docs.getTree(repo.currentRepoId!, item.path)
+    if (item.children && item.children.length > 0) return item.children
+    const items = await api.docs.getTree(store.currentRepoId!, item.path)
     item.children = items
     return items
   }
 
-  async function createFile(parentPath: string, name: string) {
-    if (!repo.currentRepoId) return
-    const path = parentPath ? `${parentPath}/${name}` : name
-    await api.docs.saveFile({
-      repo_id: repo.currentRepoId,
-      path,
-      content: '',
-      message: `docs: create ${path}`,
-    })
-    await repo.fetchTree()
-  }
-
-  async function createFolder(parentPath: string, name: string) {
-    if (!repo.currentRepoId) return
-    const path = parentPath ? `${parentPath}/${name}` : name
-    // Create a .gitkeep to simulate folder creation
-    await api.docs.saveFile({
-      repo_id: repo.currentRepoId,
-      path: `${path}/.gitkeep`,
-      content: '',
-      message: `docs: create folder ${path}`,
-    })
-    await repo.fetchTree()
-  }
-
-  async function deleteItem(path: string) {
-    if (!repo.currentRepoId) return
-    await api.docs.deleteFile(repo.currentRepoId, path)
-    await repo.fetchTree()
-  }
-
-  async function renameItem(oldPath: string, newPath: string) {
-    if (!repo.currentRepoId) return
-    await api.docs.renameFile({
-      repo_id: repo.currentRepoId,
-      old_path: oldPath,
-      new_path: newPath,
-      message: `docs: rename ${oldPath} to ${newPath}`,
-    })
-    await repo.fetchTree()
-  }
-
-  return {
-    tree: repo.tree,
-    loading: repo.loading,
-    refresh,
-    loadChildren,
-    createFile,
-    createFolder,
-    deleteItem,
-    renameItem,
-  }
+  return { store, loadChildren }
 }

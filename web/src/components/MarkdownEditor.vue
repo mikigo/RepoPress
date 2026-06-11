@@ -39,6 +39,7 @@ onMounted(async () => {
     lineNumbers(),
     highlightActiveLine(),
     history(),
+    EditorView.lineWrapping,
     markdown({
       base: markdownLanguage,
       codeLanguages: languages,
@@ -62,6 +63,12 @@ onMounted(async () => {
     state,
     parent: editorRef.value,
   })
+
+  // Refresh CodeMirror when container resizes (e.g., preview toggle)
+  resizeObserver = new ResizeObserver(() => {
+    view?.requestMeasure()
+  })
+  resizeObserver.observe(editorRef.value)
 })
 
 watch(() => props.content, (newVal) => {
@@ -78,9 +85,18 @@ watch(() => props.content, (newVal) => {
   }
 })
 
+let resizeObserver: ResizeObserver | null = null
+
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
   view?.destroy()
 })
+
+function getScrollDOM() {
+  return view?.scrollDOM ?? null
+}
+
+defineExpose({ getScrollDOM })
 
 function insertFormat(before: string, after: string) {
   if (!view) return

@@ -6,6 +6,9 @@ const props = defineProps<{
 }>()
 
 const container = ref<HTMLDivElement>()
+const scrollContainer = ref<HTMLDivElement>()
+
+defineExpose({ getScrollContainer: () => scrollContainer.value })
 
 watch(() => props.html, async () => {
   if (!container.value) return
@@ -34,7 +37,7 @@ watch(() => props.html, async () => {
 </script>
 
 <template>
-  <div class="h-full overflow-y-auto">
+  <div ref="scrollContainer" class="h-full overflow-y-auto">
     <div class="p-3 border-b border-gray-200 dark:border-gray-700 font-medium text-sm flex-shrink-0">
       Preview
     </div>

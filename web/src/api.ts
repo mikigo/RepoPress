@@ -9,8 +9,7 @@ const $fetch = createFetch({
     onRequest({ options }) {
       const auth = useAuthStore()
       if (auth.token) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(options.headers as any).Authorization = `Bearer ${auth.token}`
+        options.headers.set('Authorization', `Bearer ${auth.token}`)
       }
     },
     onResponseError({ response }) {

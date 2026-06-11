@@ -11,13 +11,13 @@ const router = createRouter({
       meta: { guest: true },
     },
     {
-      path: '/editor/:repoId(\\d+)?',
+      path: '/editor/:repoId([a-zA-Z0-9-]+)?',
       name: 'editor',
       component: () => import('./views/Editor.vue'),
       meta: { auth: true },
     },
     {
-      path: '/editor/:repoId(\\d+)/:path(.*)',
+      path: '/editor/:repoId([a-zA-Z0-9-]+)/:path(.*)',
       name: 'editor-file',
       component: () => import('./views/Editor.vue'),
       meta: { auth: true },
