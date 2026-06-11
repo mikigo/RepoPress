@@ -22,8 +22,6 @@ const form = ref({
 
 const columns: DataTableColumns<User> = [
   { title: 'Username', key: 'username' },
-  { title: 'Email', key: 'email' },
-  { title: 'Display Name', key: 'display_name' },
   {
     title: 'Role',
     key: 'is_superuser',
@@ -93,17 +91,15 @@ async function saveUser() {
   try {
     if (editingUser.value) {
       await api.admin.updateUser(editingUser.value.id, {
-        email: form.value.email,
-        display_name: form.value.display_name,
-        is_superuser: form.value.is_superuser,
         ...(form.value.password ? { password: form.value.password } : {}),
+        is_superuser: form.value.is_superuser,
       })
       message.success('User updated')
     } else {
       await api.admin.createUser({
         username: form.value.username,
-        email: form.value.email,
-        display_name: form.value.display_name,
+        email: `${form.value.username}@repopress.local`,
+        display_name: form.value.username,
         password: form.value.password,
         is_superuser: form.value.is_superuser,
       })
@@ -130,12 +126,6 @@ async function saveUser() {
       <n-form>
         <n-form-item label="Username">
           <n-input v-model:value="form.username" :disabled="!!editingUser" placeholder="Username" />
-        </n-form-item>
-        <n-form-item label="Email">
-          <n-input v-model:value="form.email" placeholder="Email" />
-        </n-form-item>
-        <n-form-item label="Display Name">
-          <n-input v-model:value="form.display_name" placeholder="Display Name" />
         </n-form-item>
         <n-form-item label="Password">
           <n-input v-model:value="form.password" type="password" :placeholder="editingUser ? 'Leave blank to keep current' : 'Password'" />

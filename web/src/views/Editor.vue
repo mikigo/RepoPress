@@ -110,6 +110,7 @@ const savePhase = ref<'confirm' | 'saving' | 'done'>('confirm')
 const saveResult = ref<{ success: boolean; message: string } | null>(null)
 
 function handleSave() {
+  if (!editorStore.isDirty) return  // No changes, nothing to save
   if (showSaveDialog.value) return  // Already open, ignore duplicate trigger
   savePhase.value = 'confirm'
   saveResult.value = null
@@ -144,6 +145,7 @@ async function doSave() {
 }
 
 function closeSaveDialog() {
+  if (savePhase.value === 'saving') return
   showSaveDialog.value = false
   savePhase.value = 'confirm'
   saveResult.value = null
@@ -199,34 +201,53 @@ const previewPanelStyle = computed(() => ({
     <AppHeader @save="handleSave" />
 
     <!-- Save confirmation dialog -->
-    <n-modal :show="showSaveDialog" :mask-closable="false" :closable="false" preset="card" style="width:320px">
-      <template #header><span class="text-15 font-semibold">保存文档</span></template>
+    <n-modal
+      :show="showSaveDialog"
+      :mask-closable="savePhase !== 'saving'"
+      preset="card"
+      role="dialog"
+      :style="{ width: '400px', borderRadius: '12px' }"
+      @esc="closeSaveDialog"
+      @mask-click="closeSaveDialog"
+      :closable="false"
+    >
       <!-- Phase: confirm -->
-      <template v-if="savePhase === 'confirm'">
-        <p class="text-13 leading-relaxed mb-4">确认是否保存，保存后将提交到文档仓库。</p>
-        <div class="flex justify-end gap-2">
-          <n-button size="tiny" @click="closeSaveDialog">取消</n-button>
-          <n-button size="tiny" type="primary" @click="doSave">确定</n-button>
+      <div v-if="savePhase === 'confirm'" class="flex flex-col items-center text-center py-2">
+        <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
         </div>
-      </template>
+        <h3 class="text-lg font-semibold text-gray-900 mb-1">保存文档</h3>
+        <p class="text-sm text-gray-500 mb-6">确认保存后，修改将提交并推送到文档仓库。</p>
+        <div class="flex gap-3 w-full">
+          <n-button class="flex-1" @click="closeSaveDialog">取消</n-button>
+          <n-button class="flex-1" type="primary" @click="doSave">确定保存</n-button>
+        </div>
+      </div>
 
       <!-- Phase: saving -->
-      <template v-else-if="savePhase === 'saving'">
-        <div class="flex items-center justify-center gap-2 py-1">
-          <n-spin size="small" />
-          <span class="text-13 text-gray-500">正在保存并推送到仓库...</span>
-        </div>
-      </template>
+      <div v-else-if="savePhase === 'saving'" class="flex flex-col items-center text-center py-4">
+        <n-spin size="medium" />
+        <p class="text-sm text-gray-500 mt-4">正在保存并推送到仓库...</p>
+      </div>
 
       <!-- Phase: done -->
-      <template v-else-if="savePhase === 'done'">
-        <n-alert :type="saveResult?.success ? 'success' : 'error'" :title="saveResult?.success ? '操作完成' : '操作失败'" class="mb-4">
-          <p class="text-13">{{ saveResult?.message }}</p>
-        </n-alert>
-        <div class="flex justify-end">
-          <n-button size="tiny" type="primary" @click="closeSaveDialog">确定</n-button>
+      <div v-else-if="savePhase === 'done'" class="flex flex-col items-center text-center py-2">
+        <div v-if="saveResult?.success" class="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
         </div>
-      </template>
+        <div v-else class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center mb-4">
+          <svg class="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-1">{{ saveResult?.success ? '操作完成' : '操作失败' }}</h3>
+        <p class="text-sm text-gray-500 mb-6">{{ saveResult?.message }}</p>
+        <n-button class="w-full" type="primary" @click="closeSaveDialog">确定</n-button>
+      </div>
     </n-modal>
 
     <div class="app-main">

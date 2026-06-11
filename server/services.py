@@ -328,18 +328,16 @@ async def delete_file(repo_id: UUID, path: str, message: Optional[str] = None) -
     provider = await get_provider_for_repo(repo_id)
     commit_msg = message or f"docs: delete {path}"
 
-    encoded = base64.b64encode(b"").decode("utf-8")
+    # Local repo: remove file + commit
+    if isinstance(provider, LocalGitProvider):
+        await provider.delete_file(path, commit_msg, repo.default_branch)
+        return {"message": f"Deleted {path}"}
+
+    # GitHub repo
     try:
         file_info = await provider.get_file(path, ref=repo.default_branch)
     except (FileNotFoundError, Exception) as exc:
         raise ValueError(f"File not found: {path}") from exc
-
-    endpoint = f"/contents/{path}"
-    payload = {
-        "message": commit_msg,
-        "sha": file_info.sha,
-        "branch": repo.default_branch,
-    }
 
     import httpx
     headers = {
@@ -350,6 +348,12 @@ async def delete_file(repo_id: UUID, path: str, message: Optional[str] = None) -
     from repo import parse_github_url
     owner, repo_name = parse_github_url(repo.git_url)
     url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/{path}"
+
+    payload = {
+        "message": commit_msg,
+        "sha": file_info.sha,
+        "branch": repo.default_branch,
+    }
 
     async with httpx.AsyncClient() as client:
         response = await client.request("DELETE", url, headers=headers, json=payload)

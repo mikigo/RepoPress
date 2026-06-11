@@ -47,11 +47,12 @@ function handleLogout() {
 
       <n-button
         v-if="editor.currentFile"
+        :disabled="!editor.isDirty"
         :type="editor.isDirty ? 'warning' : 'primary'"
         size="small"
         @click="$emit('save')"
       >
-        {{ editor.isDirty ? '● Save' : 'Save' }}
+        {{ editor.isDirty ? '● Save' : 'Saved' }}
       </n-button>
     </div>
 
@@ -63,19 +64,18 @@ function handleLogout() {
       </n-button>
 
       <n-dropdown trigger="click" :options="[
-        { label: 'Editor', key: 'editor' },
-        { label: 'Repos', key: 'admin-repos' },
-        { label: 'Users', key: 'admin-users' },
-        { label: 'Permissions', key: 'admin-permissions' },
-        { label: 'Settings', key: 'admin-settings' },
+        { label: 'Repos', key: '/admin/repos' },
+        { label: 'Users', key: '/admin/users' },
+        { label: 'Permissions', key: '/admin/permissions' },
+        { label: 'Settings', key: '/admin/settings' },
         { type: 'divider' },
         { label: 'Logout', key: 'logout' },
-      ]" @select="(k: string) => k === 'logout' ? handleLogout() : goTo('/' + k)">
+      ]" @select="(k: string) => k === 'logout' ? handleLogout() : goTo(k)">
         <n-button text>
           <template #icon>
             <span class="text-lg">👤</span>
           </template>
-          {{ auth.user?.display_name || auth.user?.username }}
+          {{ auth.user?.username }}
         </n-button>
       </n-dropdown>
     </div>

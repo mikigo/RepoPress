@@ -284,7 +284,7 @@ class LocalGitProvider(GitProvider):
             raise ValueError(f"Not a git repository: {self.repo_path}")
         self.default_branch = default_branch
 
-    async def _run(self, *args: str, cwd: str | None = None) -> str:
+    async def _run(self, *args: str, cwd: str | None = None, timeout: int = 30) -> str:
         """Run a git command and return stdout."""
         cmd = ["git", "-C", str(cwd or self.repo_path)] + list(args)
         proc = await asyncio.create_subprocess_exec(
@@ -292,7 +292,11 @@ class LocalGitProvider(GitProvider):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            raise Exception(f"git {args[0]} timed out after {timeout}s")
         if proc.returncode != 0:
             err = stderr.decode().strip()
             raise Exception(f"git {args[0]} failed: {err}")
@@ -341,30 +345,33 @@ class LocalGitProvider(GitProvider):
             return False
 
     async def fetch_and_rebase(self, branch: str) -> dict:
-        """Fetch origin and rebase local branch on top. Returns status dict."""
+        """Pull with rebase. Uses a single network operation (pull = fetch + rebase).
+        Returns status dict. Fast-path: skips if no remote or no remote branch."""
         if not await self._has_remote():
             return {"success": True, "skipped": True, "detail": "No remote configured, skipping fetch"}
 
-        try:
-            await self._run("fetch", "origin")
-        except Exception as exc:
-            return {"success": False, "error": f"Fetch failed: {exc}"}
+        # Checkout to the target branch first
+        await self._run("checkout", branch)
 
         if not await self._has_remote_branch(branch):
             return {"success": True, "skipped": True, "detail": "No remote branch yet, skipping rebase"}
 
         try:
-            await self._run("checkout", branch)
             await self._run("pull", "--rebase", "origin", branch)
             return {"success": True, "detail": "Rebase successful"}
         except Exception as exc:
             err = str(exc)
-            # Try to abort the rebase if it's in progress
             try:
                 await self._run("rebase", "--abort")
             except Exception:
                 pass
             return {"success": False, "conflict": True, "error": f"Rebase conflict: {err}"}
+
+    async def delete_file(self, path: str, message: str, branch: str):
+        """Delete a file and commit the deletion."""
+        await self._run("checkout", branch)
+        await self._run("rm", path)
+        await self._run("commit", "-m", message, "--allow-empty")
 
     async def push(self, branch: str) -> dict:
         """Push branch to origin. Returns dict with success/error info."""

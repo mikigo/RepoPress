@@ -6,6 +6,11 @@ import type { TreeItem } from '../stores.js'
 const props = defineProps<{
   items: TreeItem[]
   depth: number
+  selectedPath: string | null
+}>()
+
+const emit = defineEmits<{
+  select: [path: string, item: TreeItem]
 }>()
 
 const { store: editorStore, fetchAndOpen } = useEditor()
@@ -27,18 +32,24 @@ function saveExpanded(state: Record<string, boolean>) {
 
 const expanded = ref<Record<string, boolean>>(loadExpanded())
 
-async function toggle(item: TreeItem) {
+function handleClick(item: TreeItem) {
+  emit('select', item.path, item)
   if (item.type === 'dir') {
     expanded.value[item.path] = !expanded.value[item.path]
     if (expanded.value[item.path] && !item.children) {
-      await loadChildren(item)
+      loadChildren(item)
     }
   } else {
-    await fetchAndOpen(item.path)
+    fetchAndOpen(item.path)
   }
 }
 
 watch(expanded, (val) => saveExpanded(val), { deep: true })
+
+function getArrow(item: TreeItem): string {
+  if (item.type !== 'dir') return ''
+  return expanded.value[item.path] ? '▾' : '▸'
+}
 
 function getIcon(item: TreeItem) {
   if (item.type === 'dir') {
@@ -46,22 +57,9 @@ function getIcon(item: TreeItem) {
   }
   const ext = item.name.split('.').pop()?.toLowerCase()
   const icons: Record<string, string> = {
-    md: '📝',
-    mdx: '📝',
-    json: '📋',
-    yaml: '📋',
-    yml: '📋',
-    toml: '📋',
-    js: '📄',
-    ts: '📄',
-    vue: '📄',
-    css: '🎨',
-    png: '🖼',
-    jpg: '🖼',
-    jpeg: '🖼',
-    gif: '🖼',
-    svg: '🖼',
-    gitkeep: '⚙',
+    md: '📝', mdx: '📝', json: '📋', yaml: '📋', yml: '📋', toml: '📋',
+    js: '📄', ts: '📄', vue: '📄', css: '🎨',
+    png: '🖼', jpg: '🖼', jpeg: '🖼', gif: '🖼', svg: '🖼', gitkeep: '⚙',
   }
   return icons[ext || ''] || '📄'
 }
@@ -69,17 +67,17 @@ function getIcon(item: TreeItem) {
 
 <template>
   <div>
-    <div
-      v-for="item in items"
-      :key="item.path"
-      class="select-none"
-    >
+    <div v-for="item in items" :key="item.path" class="select-none">
       <div
         class="flex items-center gap-1 py-0.5 px-1 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 text-sm"
-        :class="{ 'bg-blue-50 dark:bg-blue-900 font-medium': editorStore.currentFile === item.path }"
+        :class="{
+          'bg-blue-100 dark:bg-blue-900/60': selectedPath === item.path,
+          'bg-blue-50 dark:bg-blue-900 font-medium': editorStore.currentFile === item.path,
+        }"
         :style="{ paddingLeft: `${depth * 16 + 4}px` }"
-        @click="toggle(item)"
+        @click="handleClick(item)"
       >
+        <span class="text-2xs w-3 text-center text-gray-400">{{ getArrow(item) }}</span>
         <span class="text-xs w-4 text-center">{{ getIcon(item) }}</span>
         <span class="truncate">{{ item.name }}</span>
       </div>
@@ -87,6 +85,8 @@ function getIcon(item: TreeItem) {
         v-if="item.type === 'dir' && expanded[item.path] && item.children"
         :items="item.children"
         :depth="depth + 1"
+        :selected-path="selectedPath"
+        @select="(p, i) => emit('select', p, i)"
       />
     </div>
   </div>

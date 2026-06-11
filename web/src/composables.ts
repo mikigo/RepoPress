@@ -72,5 +72,23 @@ export function useFileTree() {
     return items
   }
 
-  return { store, loadChildren }
+  async function createFile(parentPath: string, name: string) {
+    if (!store.currentRepoId) return
+    const path = `${parentPath}/${name}`
+    await api.docs.saveFile({
+      repo_id: store.currentRepoId,
+      path,
+      content: '',
+      message: `docs: create ${path}`,
+    })
+    await store.fetchTree()
+  }
+
+  async function deleteItem(path: string) {
+    if (!store.currentRepoId) return
+    await api.docs.deleteFile(store.currentRepoId, path)
+    await store.fetchTree()
+  }
+
+  return { store, loadChildren, createFile, deleteItem }
 }
