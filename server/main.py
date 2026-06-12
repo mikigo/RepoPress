@@ -4,6 +4,8 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from tortoise import Tortoise
 
 from config import settings
@@ -113,6 +115,18 @@ def create_app() -> FastAPI:
     @app.get("/api/health")
     async def health_check():
         return {"status": "ok", "version": "0.1.0"}
+
+    # Serve built frontend in production
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    if os.path.isdir(static_dir):
+        app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
+        # SPA fallback — serve index.html for all non-API routes
+        @app.get("/{full_path:path}")
+        async def spa_fallback(full_path: str):
+            index_path = os.path.join(static_dir, "index.html")
+            if os.path.isfile(index_path):
+                return FileResponse(index_path)
+            return {"detail": "Frontend not found"}
 
     return app
 

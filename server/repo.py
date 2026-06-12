@@ -344,8 +344,45 @@ class LocalGitProvider(GitProvider):
         except Exception:
             return False
 
+    async def _is_working_tree_clean(self) -> bool:
+        """Check if working directory has no modified tracked files."""
+        try:
+            status = await self._run("status", "--porcelain")
+            for line in status.splitlines():
+                if line.strip():
+                    # Ignore untracked files only (lines starting with ??)
+                    if not line.startswith("??"):
+                        return False
+            return True
+        except Exception:
+            return False
+
+    async def _stash_changes(self) -> Optional[str]:
+        """Stash local changes. Returns stash ref if stashed, None if nothing to stash."""
+        try:
+            output = await self._run("stash", "push", "-m", "repopress-autostash")
+            if "No local changes to save" in output:
+                return None
+            return "stash@{0}"
+        except Exception:
+            return None
+
+    async def _stash_pop(self) -> dict:
+        """Pop the most recent stash. Returns success/conflict info."""
+        try:
+            await self._run("stash", "pop")
+            return {"success": True, "detail": "Stash pop successful"}
+        except Exception as exc:
+            err = str(exc)
+            # Check if it's a merge conflict during stash pop
+            if "CONFLICT" in err or "conflict" in err.lower():
+                return {"success": False, "conflict": True,
+                        "error": f"Stash pop conflict: {err}"}
+            return {"success": False, "conflict": False,
+                    "error": f"Stash pop failed: {err}"}
+
     async def fetch_and_rebase(self, branch: str) -> dict:
-        """Pull with rebase. Uses a single network operation (pull = fetch + rebase).
+        """Pull with rebase. Auto-stashes local changes to ensure clean working tree.
         Returns status dict. Fast-path: skips if no remote or no remote branch."""
         if not await self._has_remote():
             return {"success": True, "skipped": True, "detail": "No remote configured, skipping fetch"}
@@ -356,16 +393,37 @@ class LocalGitProvider(GitProvider):
         if not await self._has_remote_branch(branch):
             return {"success": True, "skipped": True, "detail": "No remote branch yet, skipping rebase"}
 
+        stash_ref = None
+        if not await self._is_working_tree_clean():
+            stash_ref = await self._stash_changes()
+
         try:
             await self._run("pull", "--rebase", "origin", branch)
-            return {"success": True, "detail": "Rebase successful"}
         except Exception as exc:
             err = str(exc)
             try:
                 await self._run("rebase", "--abort")
             except Exception:
                 pass
+            # Pop stash before returning error
+            if stash_ref:
+                await self._stash_pop()
             return {"success": False, "conflict": True, "error": f"Rebase conflict: {err}"}
+
+        rebase_result = {"success": True, "detail": "Rebase successful"}
+        stash_result = None
+
+        if stash_ref:
+            stash_result = await self._stash_pop()
+            if not stash_result.get("success"):
+                # Stash pop conflict: real conflict (remote changes vs local uncommitted)
+                rebase_result = {"success": False, "conflict": True,
+                                 "error": stash_result.get("error", "Merge conflict after rebase")}
+
+        if stash_result:
+            rebase_result["stash"] = stash_result
+
+        return rebase_result
 
     async def delete_file(self, path: str, message: str, branch: str):
         """Delete a file and commit the deletion."""

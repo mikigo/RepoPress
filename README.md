@@ -48,24 +48,195 @@ SSG 类型    → rspress
 
 添加后，切换至编辑器即可浏览文件树、在线编辑。支持多仓库独立配置。
 
-### docs 端集成
+### 接入你的 Rspress 文档项目（以 sailwind_docs 为例）
 
-在 SSG 配置中将 `editLink` 指向 RepoPress 编辑器，文档页即出现编辑按钮。
+下面以 `C:\Users\Administrator\Desktop\code\sailwind_docs` 这个 Rspress 文档项目为例，一步步演示如何接入 RepoPress。
 
-**Rspress** — `rspress.config.ts`
+> 整个过程一共三步：**① 启动 RepoPress** → **② 添加仓库** → **③ 配置 editLink**。不需要改动文档项目的构建流程或目录结构。
 
-```typescript
-export default defineConfig({
-  themeConfig: {
-    editLink: {
-      docRepoBaseUrl: 'https://repopress.example.com/editor/<repo-id>/docs'
-    }
-  }
-})
+---
+
+#### 准备工作
+
+先确认你的 Rspress 项目结构大致如下：
+
+```
+sailwind_docs/
+├── docs/              ← 文档内容在这
+│   ├── index.md
+│   ├── about.mdx
+│   └── ...
+├── rspress.config.ts  ← 等下要改它
+├── package.json
+└── tsconfig.json
 ```
 
+确认项目已经在 GitHub 上（或本地 git 仓库）：
+
+```bash
+cd C:\Users\Administrator\Desktop\code\sailwind_docs
+git status
+# 如果还没有初始化 git：
+#   git init
+#   git add .
+#   git commit -m "init"
+#   git remote add origin https://github.com/你的用户名/仓库名.git
+#   git push -u origin main
+```
+
+---
+
+#### 第一步：启动 RepoPress
+
+```bash
+# 1-1. 进入 RepoPress 后端目录，安装并启动
+cd C:\Users\Administrator\Desktop\code\RepoPress\server
+pip install -e .
+python -m server.cli start
+
+# 1-2. 另开一个终端，启动前端
+cd C:\Users\Administrator\Desktop\code\RepoPress\web
+npm install
+npm run dev
+```
+
+启动后访问 `http://localhost:5173`。如果首次启动没有用户，会自动创建默认管理员 `admin` / `admin123`，用这个账号登录。
+
+---
+
+#### 第二步：在管理后台添加仓库
+
+登录后，点击右上角头像 → **管理后台**（Admin），进入 **仓库管理** → 点击 **添加仓库**。
+
+**情况 A：本地仓库（推荐入门用，最简单）**
+
+不用 GitHub Token，直接指到本地路径即可：
+
+```
+Name       → SailWind Docs
+Local Path → C:\Users\Administrator\Desktop\code\sailwind_docs
+Docs 目录   → docs
+SSG 类型    → rspress
+```
+
+填完点 **保存**，仓库就加好了。右侧会显示一个新生成的 **Repo ID**（类似 `a1b2c3d4`），记下来，下一步要用。
+
+**情况 B：远程仓库（GitHub，适合团队协作）**
+
+需要先准备一个 GitHub Personal Access Token：
+
+1. 打开 [GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens](https://github.com/settings/tokens)
+2. 点 **Generate new token**
+3. `Repository access` 选择 `Only select repositories`，然后选你的文档仓库
+4. `Permissions` 中 `Contents` 设为 **Read and write**
+5. 生成后把 token 复制下来（只显示一次）
+
+然后回到 RepoPress 管理后台填写：
+
+```
+Name         → SailWind Docs
+Git URL      → https://github.com/你的用户名/sailwind_docs.git
+Docs 目录     → docs
+SSG 类型      → rspress
+Access Token → ghp_xxxxxxxxxxxxxxxxxxxx  （刚才生成的 token）
+```
+
+> **怎么拿到 GitHub URL？** 在 GitHub 仓库页面点绿色的 **<> Code** 按钮，切到 HTTPS 标签，复制那个 `.git` 结尾的地址即可。
+
+---
+
+#### 第三步：在 Rspress 中配置 editLink
+
+这是最后一步：在文档项目的 `rspress.config.ts` 中加上 `editLink` 配置，让文档页面出现"编辑此页"按钮。
+
+打开 `rspress.config.ts`（以 sailwind_docs 为例，路径是 `C:\Users\Administrator\Desktop\code\sailwind_docs\rspress.config.ts`），在 `themeConfig` 里添加一行：
+
+```typescript
+import { defineConfig } from '@rspress/core';
+import path from 'node:path';
+
+export default defineConfig({
+    root: 'docs',
+    base: '/sailwind_docs/',
+    title: 'SailWind',
+    // ... 其他配置保持不变 ...
+    themeConfig: {
+        // ... 原来的 themeConfig 配置保持不变 ...
+
+        // ↓↓↓ 加上下面这几行 ↓↓↓
+        editLink: {
+            docRepoBaseUrl:
+                'http://localhost:5173/editor/你的repo-id/docs',
+        },
+    },
+});
+```
+
+> **`docRepoBaseUrl` 怎么填？**
+>
+> 格式：`http://localhost:5173/editor/<repo-id>/docs`
+>
+> 把 `<repo-id>` 替换成上一步你在管理后台看到的那个 ID（比如 `a1b2c3d4`）。
+>
+> 例如：`'http://localhost:5173/editor/a1b2c3d4/docs'`
+>
+> 如果是生产环境部署到了服务器上，把 `http://localhost:5173` 换成你的实际域名。
+
+修改完保存文件，重启 Rspress 开发服务器：
+
+```bash
+cd C:\Users\Administrator\Desktop\code\sailwind_docs
+npm run dev
+# 或 pnpm dev
+```
+
+---
+
+#### 验证效果
+
+1. 打开 Rspress 文档页面（通常是 `http://localhost:xxxx`，终端里会打印）
+2. 浏览任意一篇文档，你应该能看到页面上多了一个 **"编辑此页"** 或铅笔图标的链接
+3. 点击它，会跳转到 RepoPress 编辑器，直接在浏览器里编辑这篇 Markdown
+4. 编辑完按 `Ctrl+S` 保存 → 确认提交信息 → 自动 commit + push 回 Git 仓库
+
+整个过程不需要打开终端、不需要 Git 命令，非开发人员也能完成。
+
+---
+
+#### 常见问题
+
 <details>
-<summary>其他 SSG</summary>
+<summary>Q: 点击编辑按钮后提示 404 / 找不到页面</summary>
+
+检查两点：
+1. RepoPress 前端和后端都启动了吗？（两个终端，一个 5173 一个 8000）
+2. `docRepoBaseUrl` 里的 `repo-id` 填对了吗？去管理后台 → 仓库列表确认。
+</details>
+
+<details>
+<summary>Q: 保存时报错 git pull / rebase 冲突</summary>
+
+说明远端有人和你同时改了同一个文件。RepoPress 会自动中止并提示。解决办法：
+- 手动 `git pull --rebase` 解决冲突后再试，或者
+- 联系团队协调编辑时间。
+</details>
+
+<details>
+<summary>Q: 我的文档目录不是 docs 怎么办？</summary>
+
+在添加仓库时把 **Docs 目录** 改成你的实际目录名即可，比如 `src`、`content` 等。`editLink` 里的 `/docs` 也要对应改成你的目录名。
+</details>
+
+<details>
+<summary>Q: 我是纯本地项目，没有推送到 GitHub 可以用吗？</summary>
+
+可以。用**情况 A（本地仓库）**添加，不需要 GitHub 账号和 Token。保存时会通过本地 git 命令 commit。
+</details>
+
+---
+
+<details>
+<summary>其他 SSG 的 editLink 配置</summary>
 
 **VitePress** — `.vitepress/config.ts`
 

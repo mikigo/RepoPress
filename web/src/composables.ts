@@ -30,7 +30,7 @@ export function useEditor() {
       message: commitMsg,
     })
     store.markSaved()
-    return data as {
+    return data as unknown as {
       commit_sha?: string
       mode: string
       conflict?: boolean
