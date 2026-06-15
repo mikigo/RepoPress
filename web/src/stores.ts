@@ -15,11 +15,11 @@ export interface User {
 export interface RepoConfig {
   id: string
   name: string
-  git_url: string
+  local_path: string
   docs_dir: string
   ssg_type: string
   default_branch: string
-  review_mode: boolean
+  hidden_extensions: string
   is_active: boolean
   created_at: string
 }

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from tortoise import fields
 from tortoise.models import Model
 
@@ -61,14 +62,12 @@ class UserGroup(Model):
 class RepoConfig(Model):
     id = fields.UUIDField(pk=True)
     name = fields.CharField(max_length=128)
-    git_url = fields.CharField(max_length=512, null=True)
     local_path = fields.CharField(max_length=1024, null=True)
     docs_dir = fields.CharField(max_length=256, default="docs")
     ssg_type = fields.CharField(max_length=32, default="vitepress")
     default_branch = fields.CharField(max_length=64, default="main")
-    access_token = fields.TextField(null=True)
     commit_template = fields.CharField(max_length=256, default="docs: update {path}")
-    review_mode = fields.BooleanField(default=False)
+    hidden_extensions = fields.TextField(null=True, default="")
     is_active = fields.BooleanField(default=True)
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)

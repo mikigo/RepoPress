@@ -1,3 +1,4 @@
+from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -86,41 +87,36 @@ class PermissionsUpdateRequest(BaseModel):
 # RepoConfig
 class RepoConfigCreate(BaseModel):
     name: str = Field(..., max_length=128)
-    git_url: Optional[str] = Field(None, max_length=512)
     local_path: Optional[str] = Field(None, max_length=1024)
     docs_dir: str = "docs"
     ssg_type: str = "vitepress"
     default_branch: str = "main"
-    access_token: Optional[str] = None
     commit_template: str = "docs: update {path}"
-    review_mode: bool = False
+    hidden_extensions: Optional[str] = ""
     is_active: bool = True
 
 
 class RepoConfigUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=128)
-    git_url: Optional[str] = Field(None, max_length=512)
     local_path: Optional[str] = Field(None, max_length=1024)
     docs_dir: Optional[str] = None
     ssg_type: Optional[str] = None
     default_branch: Optional[str] = None
-    access_token: Optional[str] = None
     commit_template: Optional[str] = None
-    review_mode: Optional[bool] = None
+    hidden_extensions: Optional[str] = None
     is_active: Optional[bool] = None
 
 
 class RepoConfigResponse(BaseModel):
     id: UUID
     name: str
-    git_url: Optional[str] = None
     local_path: Optional[str] = None
     is_local: bool = False
     docs_dir: str
     ssg_type: str
     default_branch: str
     commit_template: str
-    review_mode: bool
+    hidden_extensions: Optional[str] = ""
     is_active: bool
     created_at: datetime
     updated_at: datetime

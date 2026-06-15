@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pydantic_settings import BaseSettings
 
 
@@ -13,7 +14,6 @@ class Settings(BaseSettings):
     git_clone_dir: str = "data/repos"
     upload_dir: str = "data/uploads"
     max_upload_size: int = 10 * 1024 * 1024
-    encryption_key: str = "change-me-encryption-key-32chr"
 
     model_config = {"env_prefix": "REPOPRESS_"}
 

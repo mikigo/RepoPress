@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore, useRepoStore, useEditorStore, useUIStore } from '../stores.js'
 
@@ -9,6 +10,20 @@ const auth = useAuthStore()
 const repo = useRepoStore()
 const editor = useEditorStore()
 const ui = useUIStore()
+
+const dropdownOptions = computed(() => {
+  if (auth.isAdmin) {
+    return [
+      { label: 'User', key: '/user' },
+      { label: 'Setting', key: '/setting' },
+      { type: 'divider' as const },
+      { label: 'Logout', key: 'logout' },
+    ]
+  }
+  return [
+    { label: 'Logout', key: 'logout' },
+  ]
+})
 
 function goTo(path: string) {
   router.push(path)
@@ -63,14 +78,7 @@ function handleLogout() {
         </template>
       </n-button>
 
-      <n-dropdown trigger="click" :options="[
-        { label: 'Repos', key: '/admin/repos' },
-        { label: 'Users', key: '/admin/users' },
-        { label: 'Permissions', key: '/admin/permissions' },
-        { label: 'Settings', key: '/admin/settings' },
-        { type: 'divider' },
-        { label: 'Logout', key: 'logout' },
-      ]" @select="(k: string) => k === 'logout' ? handleLogout() : goTo(k)">
+      <n-dropdown trigger="click" :options="dropdownOptions" @select="(k: string) => k === 'logout' ? handleLogout() : goTo(k)">
         <n-button text>
           <template #icon>
             <span class="text-lg">👤</span>

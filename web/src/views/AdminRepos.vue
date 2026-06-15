@@ -13,17 +13,33 @@ const showModal = ref(false)
 const editingRepo = ref<Partial<RepoConfig> | null>(null)
 const form = ref({
   name: '',
-  git_url: '',
+  local_path: '',
   docs_dir: 'docs',
   ssg_type: 'vitepress',
   default_branch: 'main',
-  access_token: '',
-  review_mode: false,
 })
 
 const columns: DataTableColumns<RepoConfig> = [
   { title: 'Name', key: 'name' },
-  { title: 'Git URL', key: 'git_url', ellipsis: { tooltip: true }, width: 280 },
+  {
+    title: 'Repo ID',
+    key: 'id',
+    width: 140,
+    render(row) {
+      return h('div', { class: 'flex items-center gap-1' }, [
+        h('code', { class: 'text-xs bg-gray-100 px-1 py-0.5 rounded', title: row.id }, row.id.slice(0, 8) + '...'),
+        h(NButton, {
+          size: 'tiny',
+          text: true,
+          onClick: () => {
+            navigator.clipboard.writeText(row.id)
+            message.success('Repo ID copied')
+          }
+        }, { default: () => '📋' }),
+      ])
+    },
+  },
+  { title: 'Local Path', key: 'local_path', ellipsis: { tooltip: true }, width: 240 },
   { title: 'Docs Dir', key: 'docs_dir', width: 100 },
   {
     title: 'SSG',
@@ -63,7 +79,7 @@ onMounted(() => {
 
 function openCreate() {
   editingRepo.value = null
-  form.value = { name: '', git_url: '', docs_dir: 'docs', ssg_type: 'vitepress', default_branch: 'main', access_token: '', review_mode: false }
+  form.value = { name: '', local_path: '', docs_dir: 'docs', ssg_type: 'vitepress', default_branch: 'main' }
   showModal.value = true
 }
 
@@ -71,12 +87,10 @@ function editRepo(row: RepoConfig) {
   editingRepo.value = row
   form.value = {
     name: row.name,
-    git_url: row.git_url,
+    local_path: row.local_path || '',
     docs_dir: row.docs_dir,
     ssg_type: row.ssg_type,
     default_branch: row.default_branch,
-    access_token: '',
-    review_mode: row.review_mode,
   }
   showModal.value = true
 }
@@ -86,23 +100,19 @@ async function saveRepo() {
     if (editingRepo.value?.id) {
       await api.admin.updateRepo(editingRepo.value.id, {
         name: form.value.name,
-        git_url: form.value.git_url,
+        local_path: form.value.local_path,
         docs_dir: form.value.docs_dir,
         ssg_type: form.value.ssg_type,
         default_branch: form.value.default_branch,
-        review_mode: form.value.review_mode,
-        ...(form.value.access_token ? { access_token: form.value.access_token } : {}),
       })
       message.success('Repo updated')
     } else {
       await api.admin.createRepo({
         name: form.value.name,
-        git_url: form.value.git_url,
+        local_path: form.value.local_path,
         docs_dir: form.value.docs_dir,
         ssg_type: form.value.ssg_type,
         default_branch: form.value.default_branch,
-        access_token: form.value.access_token,
-        review_mode: form.value.review_mode,
       })
       message.success('Repo created')
     }
@@ -146,8 +156,8 @@ function removeRepo(row: RepoConfig) {
         <n-form-item label="Name">
           <n-input v-model:value="form.name" placeholder="My Docs" />
         </n-form-item>
-        <n-form-item label="Git URL">
-          <n-input v-model:value="form.git_url" placeholder="https://github.com/owner/repo.git" />
+        <n-form-item label="Local Path">
+          <n-input v-model:value="form.local_path" placeholder="/home/user/my-docs" />
         </n-form-item>
         <n-form-item label="Docs Directory">
           <n-input v-model:value="form.docs_dir" placeholder="docs" />
@@ -162,13 +172,6 @@ function removeRepo(row: RepoConfig) {
         </n-form-item>
         <n-form-item label="Default Branch">
           <n-input v-model:value="form.default_branch" placeholder="main" />
-        </n-form-item>
-        <n-form-item label="Access Token">
-          <n-input v-model:value="form.access_token" type="password" :placeholder="editingRepo ? 'Leave blank to keep current' : 'GitHub personal access token'" />
-        </n-form-item>
-        <n-form-item label="Review Mode">
-          <n-switch v-model:value="form.review_mode" />
-          <span class="ml-2 text-sm text-gray-500">Create PR instead of direct push</span>
         </n-form-item>
       </n-form>
       <template #footer>

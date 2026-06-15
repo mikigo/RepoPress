@@ -1,4 +1,4 @@
-import base64
+from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -10,7 +10,7 @@ from tortoise.exceptions import DoesNotExist
 
 from config import settings
 from models import Permission, RepoConfig, Role, User
-from repo import GitHubProvider, GitProvider, LocalGitProvider
+from repo import LocalGitProvider
 from schemas import (
     FileContentResponse,
     PermissionCreate,
@@ -21,45 +21,6 @@ from schemas import (
 )
 
 logger = logging.getLogger("repopress")
-
-
-# ─── Encryption helpers for access_token ───────────────────────────────
-def _pad_key(key: str) -> bytes:
-    """Ensure key is exactly 32 bytes for AES-256."""
-    key_bytes = key.encode("utf-8")
-    if len(key_bytes) >= 32:
-        return key_bytes[:32]
-    return key_bytes.ljust(32, b"\0")
-
-
-def encrypt_token(plaintext: str, key: str = settings.encryption_key) -> str:
-    """Encrypt a plaintext string using AES-256-CBC and return base64."""
-    from cryptography.hazmat.primitives import padding
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
-    key_bytes = _pad_key(key)
-    iv = base64.b64decode("AAAAAAAAAAAAAAAAAAAAAA==")  # 16 zero bytes for simplicity
-    # In production use os.urandom(16) and store the IV alongside
-    padder = padding.PKCS7(128).padder()
-    padded_data = padder.update(plaintext.encode("utf-8")) + padder.finalize()
-    cipher = Cipher(algorithms.AES(key_bytes), modes.CBC(iv))
-    encryptor = cipher.encryptor()
-    encrypted = encryptor.update(padded_data) + encryptor.finalize()
-    return base64.b64encode(encrypted).decode("utf-8")
-
-
-def decrypt_token(ciphertext_b64: str, key: str = settings.encryption_key) -> str:
-    """Decrypt a base64 AES-256-CBC encrypted string."""
-    from cryptography.hazmat.primitives import padding
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
-    key_bytes = _pad_key(key)
-    iv = base64.b64decode("AAAAAAAAAAAAAAAAAAAAAA==")
-    cipher = Cipher(algorithms.AES(key_bytes), modes.CBC(iv))
-    decryptor = cipher.decryptor()
-    padded_data = decryptor.update(base64.b64decode(ciphertext_b64)) + decryptor.finalize()
-    unpadder = padding.PKCS7(128).unpadder()
-    return (unpadder.update(padded_data) + unpadder.finalize()).decode("utf-8")
 
 
 # ─── Auth Service ──────────────────────────────────────────────────────
@@ -124,17 +85,14 @@ async def get_user_by_id(user_id: UUID) -> Optional[User]:
 # ─── Admin Service ─────────────────────────────────────────────────────
 
 async def create_repo(repo_data: RepoConfigCreate) -> RepoConfig:
-    encrypted_token = encrypt_token(repo_data.access_token) if repo_data.access_token else ""
     repo = await RepoConfig.create(
         name=repo_data.name,
-        git_url=repo_data.git_url,
         local_path=repo_data.local_path,
         docs_dir=repo_data.docs_dir,
         ssg_type=repo_data.ssg_type,
         default_branch=repo_data.default_branch,
-        access_token=encrypted_token,
         commit_template=repo_data.commit_template,
-        review_mode=repo_data.review_mode,
+        hidden_extensions=repo_data.hidden_extensions or "",
         is_active=repo_data.is_active,
     )
     return repo
@@ -157,8 +115,6 @@ async def update_repo(repo_id: UUID, repo_data: RepoConfigUpdate) -> Optional[Re
         return None
 
     update_fields = repo_data.model_dump(exclude_unset=True)
-    if "access_token" in update_fields and update_fields["access_token"]:
-        update_fields["access_token"] = encrypt_token(update_fields["access_token"])
 
     if update_fields:
         await RepoConfig.filter(id=repo_id).update(**update_fields)
@@ -228,16 +184,8 @@ async def get_provider_for_repo(repo_id: UUID) -> GitProvider:
     if not repo:
         raise ValueError(f"Repo not found: {repo_id}")
 
-    if repo.local_path:
-        return LocalGitProvider(
-            repo_path=repo.local_path,
-            default_branch=repo.default_branch,
-        )
-
-    token = decrypt_token(repo.access_token)
-    return GitHubProvider(
-        git_url=repo.git_url,
-        access_token=token,
+    return LocalGitProvider(
+        repo_path=repo.local_path,
         default_branch=repo.default_branch,
     )
 
@@ -267,57 +215,27 @@ async def save_file(
     provider = await get_provider_for_repo(repo_id)
     commit_msg = message or repo.commit_template.format(path=path)
 
-    if repo.review_mode:
-        # PR mode: create a branch, commit, and open PR
-        branch_name = f"docs/update-{path.replace('/', '-').replace('.', '-')}"
-        try:
-            await provider.create_branch(branch_name, repo.default_branch)
-        except Exception as exc:
-            # Branch may already exist; try to reuse
-            logger.warning("Branch creation (may already exist): %s", exc)
-
-        result = await provider.create_or_update_file(
-            path=path, content=content, message=commit_msg, branch=branch_name
-        )
-        pr = await provider.create_pr(
-            title=commit_msg,
-            head=branch_name,
-            base=repo.default_branch,
-            body=f"Documentation update for {path}",
-        )
+    # fetch → rebase → write → commit → push
+    rebase_result = await provider.fetch_and_rebase(repo.default_branch)
+    if not rebase_result.get("success"):
         return {
-            "commit_sha": result.sha,
-            "pr_number": pr.number,
-            "pr_url": pr.url,
-            "mode": "review",
-        }
-    else:
-        # Direct mode: fetch → rebase → write → commit → push
-        rebase_result = None
-        push_result = None
-
-        if isinstance(provider, LocalGitProvider):
-            rebase_result = await provider.fetch_and_rebase(repo.default_branch)
-            if not rebase_result.get("success"):
-                return {
-                    "mode": "direct",
-                    "rebase": rebase_result,
-                    "conflict": rebase_result.get("conflict", False),
-                }
-
-        result = await provider.create_or_update_file(
-            path=path, content=content, message=commit_msg, branch=repo.default_branch
-        )
-
-        if isinstance(provider, LocalGitProvider):
-            push_result = await provider.push(repo.default_branch)
-
-        return {
-            "commit_sha": result.sha,
             "mode": "direct",
             "rebase": rebase_result,
-            "push": push_result,
+            "conflict": rebase_result.get("conflict", False),
         }
+
+    result = await provider.create_or_update_file(
+        path=path, content=content, message=commit_msg, branch=repo.default_branch
+    )
+
+    push_result = await provider.push(repo.default_branch)
+
+    return {
+        "commit_sha": result.sha,
+        "mode": "direct",
+        "rebase": rebase_result,
+        "push": push_result,
+    }
 
 
 async def delete_file(repo_id: UUID, path: str, message: Optional[str] = None) -> dict:
@@ -328,43 +246,7 @@ async def delete_file(repo_id: UUID, path: str, message: Optional[str] = None) -
     provider = await get_provider_for_repo(repo_id)
     commit_msg = message or f"docs: delete {path}"
 
-    # Local repo: remove file + commit
-    if isinstance(provider, LocalGitProvider):
-        await provider.delete_file(path, commit_msg, repo.default_branch)
-        return {"message": f"Deleted {path}"}
-
-    # GitHub repo
-    try:
-        file_info = await provider.get_file(path, ref=repo.default_branch)
-    except (FileNotFoundError, Exception) as exc:
-        raise ValueError(f"File not found: {path}") from exc
-
-    import httpx
-    headers = {
-        "Authorization": f"Bearer {decrypt_token(repo.access_token)}",
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "RepoPress/0.1.0",
-    }
-    from repo import parse_github_url
-    owner, repo_name = parse_github_url(repo.git_url)
-    url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/{path}"
-
-    payload = {
-        "message": commit_msg,
-        "sha": file_info.sha,
-        "branch": repo.default_branch,
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.request("DELETE", url, headers=headers, json=payload)
-        if response.status_code >= 400:
-            detail = response.text
-            try:
-                detail = response.json().get("message", detail)
-            except Exception:
-                pass
-            raise Exception(f"GitHub API error: {detail}")
-
+    await provider.delete_file(path, commit_msg, repo.default_branch)
     return {"message": f"Deleted {path}"}
 
 
@@ -475,12 +357,20 @@ async def get_tree(repo_id: UUID, path: str = "", ref: Optional[str] = None) -> 
 
     items = await provider.get_tree(path=path, ref=ref or repo.default_branch)
 
+    # Filter by hidden extensions
+    hidden = [e.strip() for e in (repo.hidden_extensions or "").split(",") if e.strip()]
+    if hidden:
+        items = [i for i in items if not any(i.path.endswith(ext) for ext in hidden)]
+
     # Get all items from repo if we need to filter by docs_dir
     if repo.docs_dir and not path:
         # Fetch the full recursive tree and filter to docs_dir
         all_items = await provider.get_tree(path="", ref=ref or repo.default_branch)
         docs_prefix = repo.docs_dir.strip("/")
         filtered = [i for i in all_items if i.path.startswith(docs_prefix + "/") or i.path == docs_prefix]
+        # Apply hidden extensions filter
+        if hidden:
+            filtered = [i for i in filtered if not any(i.path.endswith(ext) for ext in hidden)]
         return _build_tree(filtered, docs_prefix)
     elif path:
         return _build_tree(items, path)

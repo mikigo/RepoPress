@@ -44,22 +44,20 @@ export interface DocRenameRequest {
 
 export interface RepoCreateRequest {
   name: string
-  git_url: string
+  local_path: string
   docs_dir?: string
   ssg_type?: string
   default_branch?: string
-  access_token: string
-  review_mode?: boolean
+  hidden_extensions?: string
 }
 
 export interface RepoUpdateRequest {
   name?: string
-  git_url?: string
+  local_path?: string
   docs_dir?: string
   ssg_type?: string
   default_branch?: string
-  access_token?: string
-  review_mode?: boolean
+  hidden_extensions?: string
   is_active?: boolean
 }
 

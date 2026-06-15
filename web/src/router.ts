@@ -23,27 +23,15 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
-      path: '/admin/repos',
-      name: 'admin-repos',
-      component: () => import('./views/AdminRepos.vue'),
+      path: '/user',
+      name: 'user',
+      component: () => import('./views/UserView.vue'),
       meta: { auth: true, admin: true },
     },
     {
-      path: '/admin/users',
-      name: 'admin-users',
-      component: () => import('./views/AdminUsers.vue'),
-      meta: { auth: true, admin: true },
-    },
-    {
-      path: '/admin/permissions',
-      name: 'admin-permissions',
-      component: () => import('./views/AdminPerms.vue'),
-      meta: { auth: true, admin: true },
-    },
-    {
-      path: '/admin/settings',
-      name: 'admin-settings',
-      component: () => import('./views/AdminSettings.vue'),
+      path: '/setting',
+      name: 'setting',
+      component: () => import('./views/SettingView.vue'),
       meta: { auth: true, admin: true },
     },
     {
