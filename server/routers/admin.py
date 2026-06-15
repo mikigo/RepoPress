@@ -56,7 +56,7 @@ async def create_repo_endpoint(
 
 @router.get("/repos", response_model=list[RepoConfigResponse])
 async def list_repos_endpoint(
-    _admin: UserResponse = Depends(require_admin),
+    _user: UserResponse = Depends(get_current_user),
 ):
     """List all repository configurations."""
     repos = await get_repos()
