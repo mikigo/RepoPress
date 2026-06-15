@@ -84,9 +84,9 @@ class LocalGitProvider(GitProvider):
             proc.kill()
             raise Exception(f"git {args[0]} timed out after {timeout}s")
         if proc.returncode != 0:
-            err = stderr.decode().strip()
+            err = stderr.decode("utf-8").strip()
             raise Exception(f"git {args[0]} failed: {err}")
-        return stdout.decode().strip()
+        return stdout.decode("utf-8").strip()
 
     async def get_file(self, path: str, ref: Optional[str] = None) -> FileInfo:
         ref = ref or self.default_branch
@@ -247,7 +247,8 @@ class LocalGitProvider(GitProvider):
     async def get_tree(self, path: str = "", ref: Optional[str] = None) -> list[TreeItem]:
         ref = ref or self.default_branch
         prefix = f"{ref}:{path}" if path else ref
-        output = await self._run("ls-tree", "-r", prefix)
+        # core.quotepath=false prevents git from escaping non-ASCII filenames
+        output = await self._run("-c", "core.quotepath=false", "ls-tree", "-r", prefix)
         items = []
         for line in output.split("\n"):
             if not line.strip():
