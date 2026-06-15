@@ -221,6 +221,5 @@ __marimo__/
 .worktrees/
 .claude/settings.json
 .claude/settings.local.json
-server/static/
 server/data/
 deploy.sh
