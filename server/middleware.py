@@ -15,7 +15,7 @@ logger = logging.getLogger("repopress")
 
 # Rate limiting state
 _rate_limit_store: dict[str, list[float]] = defaultdict(list)
-RATE_LIMIT_MAX = 5
+RATE_LIMIT_MAX = 10
 RATE_LIMIT_WINDOW = 60  # seconds
 
 
