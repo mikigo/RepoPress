@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./logo.png" style="width: 250px;">
+  <img src="./logo.png" style="width: 200px;">
   <h1 align="center">RepoPress</h1>
   <p align="center">为 Git 文档仓库提供在线编辑能力的轻量级 CMS。</p>
 </p>
