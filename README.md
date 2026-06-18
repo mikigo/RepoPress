@@ -1,7 +1,9 @@
 <p align="center">
+  <img src="./logo.png" style="width: 250px;">
   <h1 align="center">RepoPress</h1>
   <p align="center">为 Git 文档仓库提供在线编辑能力的轻量级 CMS。</p>
 </p>
+
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.8+-3776AB?logo=python" alt="Python">
