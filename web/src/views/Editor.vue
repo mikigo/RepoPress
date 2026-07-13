@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+import { useMessage } from 'naive-ui'
 import { useRepoStore, useUIStore } from '../stores.js'
 import { useEditor, usePreview } from '../composables.js'
 import AppHeader from '../components/AppHeader.vue'
@@ -11,6 +12,7 @@ import PreviewPanel from '../components/PreviewPanel.vue'
 const route = useRoute()
 const repo = useRepoStore()
 const ui = useUIStore()
+const message = useMessage()
 const { store: editorStore, fetchAndOpen, saveFile } = useEditor()
 const preview = usePreview()
 
@@ -32,7 +34,7 @@ function setupScrollSync() {
     const pct = max > 0 ? editorScroll.scrollTop / max : 0
     const pMax = previewScroll.scrollHeight - previewScroll.clientHeight
     previewScroll.scrollTop = pct * pMax
-    syncing = false
+    requestAnimationFrame(() => { syncing = false })
   }
 
   const onPreviewScroll = () => {
@@ -42,7 +44,7 @@ function setupScrollSync() {
     const pct = max > 0 ? previewScroll.scrollTop / max : 0
     const eMax = editorScroll.scrollHeight - editorScroll.clientHeight
     editorScroll.scrollTop = pct * eMax
-    syncing = false
+    requestAnimationFrame(() => { syncing = false })
   }
 
   editorScroll.addEventListener('scroll', onEditorScroll)
@@ -109,8 +111,12 @@ const showSaveDialog = ref(false)
 const savePhase = ref<'confirm' | 'saving' | 'done'>('confirm')
 const saveResult = ref<{ success: boolean; message: string } | null>(null)
 
-function handleSave() {
-  if (!editorStore.isDirty) return  // No changes, nothing to save
+function handleLocalSave() {
+  message.success('本地已保存')
+}
+
+function handlePush() {
+  if (!editorStore.isDirty) return  // No changes, nothing to push
   if (showSaveDialog.value) return  // Already open, ignore duplicate trigger
   savePhase.value = 'confirm'
   saveResult.value = null
@@ -129,6 +135,7 @@ async function doSave() {
       }
     } else if (result?.push) {
       const push = result.push
+      if (push.success) editorStore.markSaved()
       saveResult.value = {
         success: push.success,
         message: push.success
@@ -136,7 +143,8 @@ async function doSave() {
           : (push.error || '推送失败'),
       }
     } else {
-      saveResult.value = { success: true, message: '保存成功' }
+      editorStore.markSaved()
+      saveResult.value = { success: true, message: '推送成功' }
     }
   } catch (e: any) {
     saveResult.value = { success: false, message: e?.data?.detail || e?.message || '保存失败' }
@@ -198,7 +206,7 @@ const previewPanelStyle = computed(() => ({
 
 <template>
   <div class="app-layout">
-    <AppHeader @save="handleSave" />
+    <AppHeader @save="handlePush" />
 
     <!-- Save confirmation dialog -->
     <n-modal
@@ -218,11 +226,11 @@ const previewPanelStyle = computed(() => ({
             <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
           </svg>
         </div>
-        <h3 class="text-lg font-semibold text-gray-900 mb-1">保存文档</h3>
-        <p class="text-sm text-gray-500 mb-6">确认保存后，修改将提交并推送到文档仓库。</p>
+        <h3 class="text-lg font-semibold text-gray-900 mb-1">推送文档</h3>
+        <p class="text-sm text-gray-500 mb-6">确认推送后，修改将提交并推送到文档仓库。</p>
         <div class="flex gap-3 w-full">
           <n-button class="flex-1" @click="closeSaveDialog">取消</n-button>
-          <n-button class="flex-1" type="primary" @click="doSave">确定保存</n-button>
+          <n-button class="flex-1" type="primary" @click="doSave">确定推送</n-button>
         </div>
       </div>
 
@@ -264,7 +272,7 @@ const previewPanelStyle = computed(() => ({
           v-if="editorStore.currentFile"
           :content="editorStore.content"
           @update:content="editorStore.setContent"
-          @save="handleSave"
+          @save="handleLocalSave"
         />
         <div v-else class="flex items-center justify-center h-full text-gray-400">
           <div class="text-center">

@@ -37,7 +37,7 @@ watch(() => props.html, async () => {
 </script>
 
 <template>
-  <div ref="scrollContainer" class="h-full overflow-y-auto">
+  <div ref="scrollContainer" class="h-full overflow-y-auto no-scrollbar">
     <div class="p-3 border-b border-gray-200 dark:border-gray-700 font-medium text-sm flex-shrink-0">
       Preview
     </div>

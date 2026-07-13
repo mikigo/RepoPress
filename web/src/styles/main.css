@@ -121,3 +121,7 @@ button.n-button {
 .cm-editor .cm-content {
   padding: 1rem;
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

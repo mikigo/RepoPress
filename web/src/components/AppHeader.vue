@@ -67,7 +67,7 @@ function handleLogout() {
         size="small"
         @click="$emit('save')"
       >
-        {{ editor.isDirty ? '● Save' : 'Saved' }}
+        {{ editor.isDirty ? '● Push' : 'Pushed' }}
       </n-button>
     </div>
 
