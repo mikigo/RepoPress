@@ -117,6 +117,6 @@ function insertFormat(before: string, after: string) {
 <template>
   <div class="flex flex-col h-full">
     <Toolbar @insert="insertFormat" @save="$emit('save')" />
-    <div ref="editorRef" class="flex-1" />
+    <div ref="editorRef" class="flex-1 overflow-hidden" />
   </div>
 </template>
