@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRepoStore, type TreeItem } from '../stores.js'
+import { ref, computed, watch } from 'vue'
+import { useRepoStore, useEditorStore, type TreeItem } from '../stores.js'
 import { useFileTree } from '../composables.js'
 import FileTree from './FileTree.vue'
 
 const repo = useRepoStore()
+const editor = useEditorStore()
 const { createFile, deleteItem } = useFileTree()
 
 const selectedPath = ref<string | null>(null)
 const selectedItem = ref<TreeItem | null>(null)
+
+// Sync selectedPath when currentFile changes externally (e.g. edit link navigation)
+watch(() => editor.currentFile, (path) => {
+  selectedPath.value = path
+})
 
 function onSelect(path: string, item: TreeItem) {
   selectedPath.value = path

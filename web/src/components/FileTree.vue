@@ -46,6 +46,16 @@ function handleClick(item: TreeItem) {
 
 watch(expanded, (val) => saveExpanded(val), { deep: true })
 
+// Auto-expand ancestors when currentFile changes (e.g. from edit link navigation)
+watch(() => editorStore.currentFile, (path) => {
+  if (!path) return
+  const parts = path.split('/')
+  for (let i = 0; i < parts.length - 1; i++) {
+    const ancestor = parts.slice(0, i + 1).join('/')
+    expanded.value[ancestor] = true
+  }
+})
+
 function getArrow(item: TreeItem): string {
   if (item.type !== 'dir') return ''
   return expanded.value[item.path] ? '▾' : '▸'

@@ -7,6 +7,6 @@ export default defineConfig({
     'app-main': 'flex flex-1 overflow-hidden',
     'editor-panel': 'flex-1 flex flex-col min-w-0',
     'sidebar': 'w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 overflow-y-auto',
-    'preview-panel': 'w-1/2 flex-shrink-0 border-l border-gray-200 dark:border-gray-700 overflow-y-auto',
+    'preview-panel': 'w-1/2 flex-shrink-0 border-l border-gray-200 dark:border-gray-700',
   },
 })

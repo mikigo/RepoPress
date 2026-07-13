@@ -18,7 +18,6 @@ const preview = usePreview()
 
 const editorComp = ref<InstanceType<typeof MarkdownEditor>>()
 const previewComp = ref<InstanceType<typeof PreviewPanel>>()
-let syncing = false
 let scrollCleanup: (() => void) | null = null
 
 function setupScrollSync() {
@@ -27,24 +26,31 @@ function setupScrollSync() {
   const previewScroll = previewComp.value?.getScrollContainer()
   if (!editorScroll || !previewScroll) return
 
+  let fromEditor = false
+  let fromPreview = false
+
   const onEditorScroll = () => {
-    if (syncing) return
-    syncing = true
-    const max = editorScroll.scrollHeight - editorScroll.clientHeight
-    const pct = max > 0 ? editorScroll.scrollTop / max : 0
-    const pMax = previewScroll.scrollHeight - previewScroll.clientHeight
-    previewScroll.scrollTop = pct * pMax
-    requestAnimationFrame(() => { syncing = false })
+    if (fromPreview || fromEditor) return
+    fromEditor = true
+    requestAnimationFrame(() => {
+      const max = editorScroll.scrollHeight - editorScroll.clientHeight
+      const pct = max > 0 ? editorScroll.scrollTop / max : 0
+      const pMax = previewScroll.scrollHeight - previewScroll.clientHeight
+      previewScroll.scrollTop = pct * pMax
+      fromEditor = false
+    })
   }
 
   const onPreviewScroll = () => {
-    if (syncing) return
-    syncing = true
-    const max = previewScroll.scrollHeight - previewScroll.clientHeight
-    const pct = max > 0 ? previewScroll.scrollTop / max : 0
-    const eMax = editorScroll.scrollHeight - editorScroll.clientHeight
-    editorScroll.scrollTop = pct * eMax
-    requestAnimationFrame(() => { syncing = false })
+    if (fromEditor || fromPreview) return
+    fromPreview = true
+    requestAnimationFrame(() => {
+      const max = previewScroll.scrollHeight - previewScroll.clientHeight
+      const pct = max > 0 ? previewScroll.scrollTop / max : 0
+      const eMax = editorScroll.scrollHeight - editorScroll.clientHeight
+      editorScroll.scrollTop = pct * eMax
+      fromPreview = false
+    })
   }
 
   editorScroll.addEventListener('scroll', onEditorScroll)
@@ -287,7 +293,7 @@ const previewPanelStyle = computed(() => ({
         class="w-1 cursor-col-resize bg-transparent hover:bg-blue-400 flex-shrink-0 transition-colors"
         @mousedown="startDrag('preview')"
       />
-      <div v-if="ui.previewVisible" class="preview-panel" :style="previewPanelStyle">
+      <div v-if="ui.previewVisible" class="preview-panel relative" :style="previewPanelStyle">
         <PreviewPanel ref="previewComp" :html="preview.renderedHtml" />
       </div>
     </div>
