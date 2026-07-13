@@ -22,8 +22,7 @@ const editorRef = ref<HTMLDivElement>()
 let view: EditorView | null = null
 let updating = false
 
-onMounted(async () => {
-  await nextTick()
+onMounted(() => {
   if (!editorRef.value) return
 
   const saveKeymap = keymap.of([{
