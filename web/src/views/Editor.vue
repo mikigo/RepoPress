@@ -95,6 +95,7 @@ onMounted(async () => {
       }
     } catch { /* ignore */ }
   }
+  await nextTick()
   applyDefaultWidths()
 })
 

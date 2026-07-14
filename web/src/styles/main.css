@@ -34,7 +34,7 @@ button.n-button {
 }
 
 .markdown-preview {
-  padding: 1rem 1.5rem 1.5rem 1.5rem;
+  padding: 0.5rem 1.5rem 1.5rem 1.5rem;
   line-height: 1.7;
   max-width: 100%;
   overflow-wrap: break-word;
