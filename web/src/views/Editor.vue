@@ -197,7 +197,8 @@ function onDrag(e: MouseEvent) {
     sidebarWidth.value = Math.max(160, Math.min(480, e.clientX - rect.left))
   } else if (dragging === 'preview') {
     const rightEdge = rect.right - e.clientX
-    previewRatio.value = Math.max(0.15, Math.min(0.75, rightEdge / rect.width))
+    const remaining = rect.width - sidebarWidth.value - 4
+    previewRatio.value = Math.max(0.15, Math.min(0.75, rightEdge / remaining))
   }
 }
 
@@ -211,13 +212,14 @@ function stopDrag() {
 
 const editorPanelStyle = computed(() => {
   if (ui.previewVisible) {
-    return { flex: `1 1 ${(1 - previewRatio.value) * 100}%` }
+    const editorFlex = 1 - previewRatio.value
+    return { flex: `${editorFlex} ${editorFlex} 0%` }
   }
   return { flex: '1 1 auto' }
 })
 
 const previewPanelStyle = computed(() => ({
-  width: `${previewRatio.value * 100}%`,
+  flex: `${previewRatio.value} ${previewRatio.value} 0%`,
 }))
 </script>
 
