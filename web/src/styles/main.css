@@ -130,3 +130,9 @@ button.n-button {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Ensure Naive UI dropdown/select popovers are above app content */
+.n-dropdown-menu,
+.v-binder-follower-container {
+  z-index: 2000 !important;
+}
