@@ -49,6 +49,11 @@ button.n-button {
   font-weight: 600;
 }
 
+/* Remove top margin from first element to align with editor's first line */
+.markdown-preview > *:first-child {
+  margin-top: 0 !important;
+}
+
 .markdown-preview h1 { font-size: 1.8em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }
 .markdown-preview h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }
 .markdown-preview h3 { font-size: 1.25em; }
