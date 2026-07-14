@@ -95,6 +95,7 @@ onMounted(async () => {
       }
     } catch { /* ignore */ }
   }
+  applyDefaultWidths()
 })
 
 watch(() => editorStore.content, (val) => {
@@ -168,6 +169,15 @@ function closeSaveDialog() {
 // --- resizable panels ---
 const sidebarWidth = ref(256)
 const previewRatio = ref(0.5)
+
+// Set default widths at 2:5:5 ratio after mount
+function applyDefaultWidths() {
+  const appMain = document.querySelector('.app-main')
+  if (appMain) {
+    sidebarWidth.value = Math.round(appMain.clientWidth * 2 / 12)
+  }
+}
+
 let dragging: 'sidebar' | 'preview' | null = null
 
 function startDrag(type: 'sidebar' | 'preview') {
